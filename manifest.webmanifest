@@ -1,0 +1,51 @@
+{
+ "name": "3B Model Görüntüleyici",
+ "short_name": "3B Görüntüleyici",
+ "description": "GLB, GLTF ve OBJ modellerini görüntüle, kesit al, ekran görüntüsü kaydet.",
+ "lang": "tr",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "background_color": "#12151a",
+ "theme_color": "#12151a",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icon-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ],
+ "file_handlers": [
+  {
+   "action": "./",
+   "accept": {
+    "model/gltf-binary": [
+     ".glb"
+    ],
+    "model/gltf+json": [
+     ".gltf"
+    ],
+    "model/obj": [
+     ".obj"
+    ],
+    "application/octet-stream": [
+     ".glb",
+     ".obj"
+    ]
+   }
+  }
+ ]
+}

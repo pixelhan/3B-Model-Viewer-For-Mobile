@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>3B Model Görüntüleyici</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#12151a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="3B Görüntüleyici">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{--bg:#12151a;--panel:rgba(24,28,35,.82);--line:rgba(140,160,190,.22);--tx:#d6dde8;--dim:#8794a8;--ac:#5aa9ff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font:13px/1.4 "Segoe UI",system-ui,sans-serif}
+#view{position:fixed;inset:0}
+canvas{display:block;outline:none}
+.panel{position:fixed;background:var(--panel);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:6px;padding:8px}
+#top{top:12px;left:50%;transform:translateX(-50%);display:flex;gap:4px;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 24px)}
+#side{top:68px;right:12px;width:230px;display:flex;flex-direction:column;gap:10px;padding:12px}
+#side h3{margin:0;font-size:12px;font-weight:600;color:var(--dim)}
+#menuBtn{top:12px;right:12px;padding:6px 10px;cursor:pointer;color:var(--tx);font:inherit;z-index:5}
+#info:not(.show){display:none}
+#menuBtn:hover{background:rgba(90,169,255,.25)}
+body.hidemenu #top{display:none}
+@media(max-width:1100px){#top{left:12px;transform:none;max-width:calc(100% - 150px)}}
+#info{left:12px;bottom:12px;color:var(--dim);font-size:12px;max-width:60%}
+button,.btn{font:inherit;color:var(--tx);background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:4px;padding:6px 10px;cursor:pointer}
+button:hover,.btn:hover{background:rgba(90,169,255,.16)}
+button.on{background:var(--ac);color:#08111d;border-color:var(--ac)}
+button:focus-visible,.btn:focus-visible,input:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.sep{width:1px;background:var(--line);margin:0 4px}
+.row{display:flex;gap:4px;flex-wrap:wrap}
+.row>button{flex:1}
+label.sl{display:flex;flex-direction:column;gap:4px;color:var(--dim)}
+label.sl span{display:flex;justify-content:space-between}
+input[type=range]{width:100%;accent-color:var(--ac)}
+#drop{position:fixed;inset:12px;border:2px dashed var(--ac);border-radius:10px;background:rgba(90,169,255,.08);display:none;align-items:center;justify-content:center;font-size:18px;pointer-events:none}
+#drop.show{display:flex}
+#hint{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;color:var(--dim);text-align:center;font-size:15px}
+#hint.hide{display:none}
+button,.btn{touch-action:manipulation}
+select{font:inherit;color:var(--tx);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:4px;padding:6px;width:100%}
+select option{background:#1b2028;color:var(--tx)}
+@media(pointer:coarse){select{min-height:40px}}
+#grab{display:none}
+#side.snap{transition:transform .22s ease}
+#side{overflow-y:auto;max-height:calc(100dvh - 80px)}
+@media(pointer:coarse){button,.btn{min-height:40px}input[type=range]{height:30px}}
+@media(max-width:700px){
+  #top{top:calc(8px + env(safe-area-inset-top));left:8px;right:auto;transform:none;flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;max-width:calc(100% - 128px);padding:6px;scrollbar-width:none}
+  #top::-webkit-scrollbar{display:none}
+  #top>*{flex:0 0 auto;white-space:nowrap}
+  #menuBtn{top:calc(8px + env(safe-area-inset-top));right:8px;min-height:40px;padding:6px 8px;font-size:12px}
+  #side{top:auto;left:8px;right:8px;width:auto;bottom:calc(8px + env(safe-area-inset-bottom));max-height:42dvh;padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  #grab{display:flex;grid-column:1/-1;position:sticky;top:-10px;margin:-10px -10px 0;height:26px;align-items:center;justify-content:center;touch-action:none;cursor:grab;z-index:2;background:rgba(24,28,35,.96);border-radius:6px 6px 0 0}
+  #grab i{width:44px;height:4px;border-radius:2px;background:var(--dim)}
+  #side{transform:translateY(var(--dy,0px))}
+  #side select{grid-column:1/-1}
+  #side h3,#side #clipOn,#side label.sl,#side #axisRow{grid-column:1/-1}
+  #side .row{display:contents}
+  #side #axisRow{display:flex}
+  #info{top:calc(64px + env(safe-area-inset-top));left:8px;right:8px;bottom:auto;max-width:none}
+  #hint{font-size:13px;padding:0 24px}
+}
+@media(max-height:520px) and (orientation:landscape){
+  #side{top:60px;right:8px;left:auto;bottom:8px;width:210px;max-height:none;display:flex;transform:none}
+  #grab{display:none}
+  #side .row{display:flex}
+}
+</style>
+<script type="importmap">
+{"imports":{
+"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="view"></div>
+<div id="hint">.glb, .gltf veya .obj dosyasını buraya bırakın<br>ya da “Dosya aç” düğmesini kullanın</div>
+<div id="drop" data-i18n="drop">Modeli yüklemek için bırakın</div>
+
+<div class="panel" id="top">
+  <button id="openBtn" type="button" data-i18n="open">Dosya aç</button>
+  <input id="file" type="file" multiple style="position:absolute;width:0;height:0;opacity:0;pointer-events:none" tabindex="-1">
+  <div class="sep"></div>
+  <button data-view="top" data-i18n="v_top">Üst</button><button data-view="bottom" data-i18n="v_bottom">Alt</button>
+  <button data-view="front" data-i18n="v_front">Ön</button><button data-view="back" data-i18n="v_back">Arka</button>
+  <button data-view="right" data-i18n="v_right">Sağ</button><button data-view="left" data-i18n="v_left">Sol</button>
+  <button data-view="iso" data-i18n="v_iso">İzometrik</button>
+  <div class="sep"></div>
+  <button id="shot" data-i18n="shot">Ekran görüntüsü al</button>
+  <button id="installBtn" type="button" data-i18n="install" hidden>Uygulamayı yükle</button>
+</div>
+
+<div class="panel" id="side">
+  <div id="grab" role="button" tabindex="0" aria-label="Paneli aç veya kapat" aria-expanded="true"><i></i></div>
+  <h3 data-i18n="sec">Kesit görünümü</h3>
+  <button id="clipOn" data-i18n="clip">Kesit / iç görünüm</button>
+  <div class="row" id="axisRow">
+    <button data-axis="x">X</button><button data-axis="y" class="on">Y</button><button data-axis="z">Z</button>
+    <button id="flip" data-i18n="flip">Ters çevir</button>
+  </div>
+  <label class="sl"><span><span data-i18n="offset">Kesim konumu</span><b id="offVal">0%</b></span>
+    <input id="offset" type="range" min="0" max="100" step="0.1" value="50"></label>
+  <h3 data-i18n="disp">Görüntü</h3>
+  <div class="row"><button id="xray" data-i18n="xray">X-Ray (yarı saydam)</button><button id="wire" data-i18n="wire">Tel kafes</button></div>
+  <h3 data-i18n="scene">Sahne</h3>
+  <div class="row"><button id="grid" class="on" data-i18n="grid">Izgara</button><button id="axes" data-i18n="axes">Eksenler</button></div>
+  <h3 data-i18n="lang">Dil</h3>
+  <select id="lang" aria-label="Language"><option value="tr">Türkçe</option><option value="en">English</option><option value="de">Deutsch</option><option value="es">Español</option></select>
+</div>
+
+<button id="menuBtn" class="panel" type="button" aria-pressed="false">Menüyü gizle</button>
+<div class="panel" id="info">Model yüklenmedi</div>
+
+<script>
+setTimeout(function(){
+  if(window.__viewerReady) return;
+  var M={tr:'Görüntüleyici başlatılamadı. Three.js CDN’den yüklenemedi (internet bağlantınızı veya reklam engelleyicinizi kontrol edin) ya da betikte hata var. Ayrıntılar için konsolu (F12) açın.',
+  en:'The viewer failed to start. Three.js could not load from the CDN (check your connection or ad blocker) or the script errored. Open the console (F12) for details.',
+  de:'Der Betrachter konnte nicht gestartet werden. Three.js wurde nicht vom CDN geladen (Verbindung oder Werbeblocker prüfen) oder das Skript hat einen Fehler. Details in der Konsole (F12).',
+  es:'No se pudo iniciar el visor. Three.js no se cargó desde el CDN (revisa tu conexión o el bloqueador de anuncios) o el script falló. Abre la consola (F12) para más detalles.'};
+  var l='';try{l=localStorage.getItem('lang')||''}catch(e){}
+  if(!M[l])l=(navigator.language||'en').slice(0,2).toLowerCase(); if(!M[l])l='en';
+  var i=document.getElementById('info'); i.classList.add('show'); i.textContent=M[l];
+}, 5000);
+</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {OBJLoader} from 'three/addons/loaders/OBJLoader.js';
+
+const $ = id => document.getElementById(id);
+const host = $('view');
+
+/* ---------- diller ---------- */
+const LOC = {tr:'tr-TR', en:'en-US', de:'de-DE', es:'es-ES'};
+const I18N = {
+  tr:{title:'3B Model Görüntüleyici', hint:'.glb, .gltf veya .obj dosyasını buraya bırakın<br>ya da “Dosya aç” düğmesini kullanın', drop:'Modeli yüklemek için bırakın',
+    open:'Dosya aç', v_top:'Üst', v_bottom:'Alt', v_front:'Ön', v_back:'Arka', v_right:'Sağ', v_left:'Sol', v_iso:'İzometrik',
+    shot:'Ekran görüntüsü al', install:'Uygulamayı yükle', menuHide:'Menüyü gizle', menuShow:'Menüyü göster',
+    sec:'Kesit görünümü', clip:'Kesit / iç görünüm', flip:'Ters çevir', offset:'Kesim konumu', disp:'Görüntü', xray:'X-Ray (yarı saydam)', wire:'Tel kafes',
+    scene:'Sahne', grid:'Izgara', axes:'Eksenler', lang:'Dil', grab:'Paneli aç veya kapat',
+    unsupported:'Desteklenmeyen dosya. .glb, .gltf veya .obj kullanın.', loading:n=>`Yükleniyor: ${n}…`, failed:(n,m)=>`Yüklenemedi: ${n}: ${m}`,
+    info:(n,t,x,y,z)=>`${n} — ${t} üçgen — ${x} × ${y} × ${z} birim`},
+  en:{title:'3D Model Viewer', hint:'Drop a .glb, .gltf or .obj file here<br>or use the “Open file” button', drop:'Drop to load the model',
+    open:'Open file', v_top:'Top', v_bottom:'Bottom', v_front:'Front', v_back:'Back', v_right:'Right', v_left:'Left', v_iso:'Isometric',
+    shot:'Take screenshot', install:'Install app', menuHide:'Hide menu', menuShow:'Show menu',
+    sec:'Section view', clip:'Section / interior view', flip:'Flip', offset:'Cut position', disp:'Display', xray:'X-Ray (translucent)', wire:'Wireframe',
+    scene:'Scene', grid:'Grid', axes:'Axes', lang:'Language', grab:'Open or close panel',
+    unsupported:'Unsupported file. Use .glb, .gltf or .obj.', loading:n=>`Loading: ${n}…`, failed:(n,m)=>`Could not load ${n}: ${m}`,
+    info:(n,t,x,y,z)=>`${n} — ${t} triangles — ${x} × ${y} × ${z} units`},
+  de:{title:'3D-Modellbetrachter', hint:'Ziehen Sie eine .glb-, .gltf- oder .obj-Datei hierher<br>oder nutzen Sie „Datei öffnen“', drop:'Zum Laden des Modells ablegen',
+    open:'Datei öffnen', v_top:'Oben', v_bottom:'Unten', v_front:'Vorne', v_back:'Hinten', v_right:'Rechts', v_left:'Links', v_iso:'Isometrisch',
+    shot:'Screenshot aufnehmen', install:'App installieren', menuHide:'Menü ausblenden', menuShow:'Menü einblenden',
+    sec:'Schnittansicht', clip:'Schnitt / Innenansicht', flip:'Umkehren', offset:'Schnittposition', disp:'Darstellung', xray:'Röntgen (transparent)', wire:'Drahtgitter',
+    scene:'Szene', grid:'Raster', axes:'Achsen', lang:'Sprache', grab:'Panel öffnen oder schließen',
+    unsupported:'Nicht unterstützte Datei. Verwenden Sie .glb, .gltf oder .obj.', loading:n=>`Wird geladen: ${n}…`, failed:(n,m)=>`Laden fehlgeschlagen: ${n}: ${m}`,
+    info:(n,t,x,y,z)=>`${n} — ${t} Dreiecke — ${x} × ${y} × ${z} Einheiten`},
+  es:{title:'Visor de modelos 3D', hint:'Suelta aquí un archivo .glb, .gltf u .obj<br>o usa el botón “Abrir archivo”', drop:'Suelta para cargar el modelo',
+    open:'Abrir archivo', v_top:'Superior', v_bottom:'Inferior', v_front:'Frontal', v_back:'Posterior', v_right:'Derecha', v_left:'Izquierda', v_iso:'Isométrica',
+    shot:'Capturar pantalla', install:'Instalar app', menuHide:'Ocultar menú', menuShow:'Mostrar menú',
+    sec:'Vista en sección', clip:'Sección / vista interior', flip:'Invertir', offset:'Posición del corte', disp:'Visualización', xray:'Rayos X (translúcido)', wire:'Malla alámbrica',
+    scene:'Escena', grid:'Cuadrícula', axes:'Ejes', lang:'Idioma', grab:'Abrir o cerrar panel',
+    unsupported:'Archivo no compatible. Usa .glb, .gltf u .obj.', loading:n=>`Cargando: ${n}…`, failed:(n,m)=>`No se pudo cargar ${n}: ${m}`,
+    info:(n,t,x,y,z)=>`${n} — ${t} triángulos — ${x} × ${y} × ${z} unidades`}
+};
+let lang = '';
+try{ lang = localStorage.getItem('lang') || ''; }catch{}
+if(!I18N[lang]){ const n = (navigator.language || 'en').slice(0,2).toLowerCase(); lang = I18N[n] ? n : 'en'; }
+const t = (k, ...a) => { const v = I18N[lang][k] ?? I18N.en[k]; return typeof v === 'function' ? v(...a) : v; };
+const setMenuLabel = () => { $('menuBtn').textContent = t(document.body.classList.contains('hidemenu') ? 'menuShow' : 'menuHide'); };
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.title = t('title');
+  document.querySelectorAll('[data-i18n]').forEach(e => e.textContent = t(e.dataset.i18n));
+  $('hint').innerHTML = t('hint');
+  $('grab').setAttribute('aria-label', t('grab'));
+  $('lang').value = lang;
+  setMenuLabel();
+}
+
+
+/* ---------- renderer / scene ---------- */
+const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.localClippingEnabled = true;
+host.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x12151a);
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 1000);
+camera.position.set(3,2.5,3);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x2a2f38, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+scene.add(sun, sun.target);
+const fill = new THREE.DirectionalLight(0x9ab8ff, 0.8);
+scene.add(fill);
+
+const gridHelper = new THREE.GridHelper(10, 20, 0x4a5668, 0x2a313c);
+const axesHelper = new THREE.AxesHelper(1);
+axesHelper.visible = false;
+scene.add(gridHelper, axesHelper);
+
+const pivot = new THREE.Group();   // holds the loaded model, centered at origin
+scene.add(pivot);
+
+/* ---------- state ---------- */
+const plane = new THREE.Plane(new THREE.Vector3(0,-1,0), 0);
+const S = {model:null, size:new THREE.Vector3(1,1,1), radius:1, clip:false, axis:'y', flip:false, xray:false, wire:false};
+const matState = new Map();   // material -> original props
+const AXES = {x:new THREE.Vector3(1,0,0), y:new THREE.Vector3(0,1,0), z:new THREE.Vector3(0,0,1)};
+
+/* ---------- materials ---------- */
+function materials(root){
+  const list = new Set();
+  root.traverse(o => { if(o.isMesh || o.isLine || o.isPoints){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m&&list.add(m)); }});
+  return list;
+}
+function applyMaterials(){
+  for(const m of materials(pivot)){
+    if(!matState.has(m)) matState.set(m,{side:m.side,transparent:m.transparent,opacity:m.opacity,depthWrite:m.depthWrite,wireframe:m.wireframe});
+    const o = matState.get(m);
+    m.clippingPlanes = S.clip ? [plane] : null;
+    m.clipShadows = true;
+    m.side = S.clip ? THREE.DoubleSide : o.side;     // show interior faces when cut
+    m.transparent = S.xray ? true : o.transparent;
+    m.opacity = S.xray ? 0.3 : o.opacity;
+    m.depthWrite = S.xray ? false : o.depthWrite;
+    m.wireframe = S.wire ? true : o.wireframe;
+    m.needsUpdate = true;
+  }
+}
+
+/* ---------- disposal ---------- */
+function disposeModel(){
+  if(!S.model) return;
+  S.model.traverse(o => {
+    if(o.geometry) o.geometry.dispose();
+    if(o.material){
+      (Array.isArray(o.material)?o.material:[o.material]).forEach(m => {
+        for(const k in m){ const v = m[k]; if(v && v.isTexture){ v.dispose(); if(v.source?.data?.close) try{v.source.data.close()}catch{} } }
+        m.dispose();
+      });
+    }
+  });
+  pivot.remove(S.model);
+  S.model = null;
+  matState.clear();
+  renderer.renderLists.dispose();
+}
+
+/* ---------- loading ---------- */
+const isModel = f => /\.(glb|gltf|obj)$/i.test(f.name);
+
+async function loadFiles(files){
+  files = [...files];
+  const main = files.find(isModel);
+  if(!main){ setInfo(t('unsupported'), true); return; }
+  setInfo(t('loading', main.name));
+  try{
+    const ext = main.name.split('.').pop().toLowerCase();
+    let obj;
+    if(ext === 'obj'){
+      obj = new OBJLoader().parse(await main.text());
+      obj.traverse(o => { if(o.isMesh && !o.geometry.attributes.normal) o.geometry.computeVertexNormals(); });
+      obj.traverse(o => { if(o.isMesh) o.material = new THREE.MeshStandardMaterial({color:0xb8c4d6, roughness:.6, metalness:.1}); });
+    }else{
+      // resolve sibling files (.bin, textures) selected together with a .gltf
+      const urls = new Map(files.map(f => [f.name, URL.createObjectURL(f)]));
+      const mgr = new THREE.LoadingManager();
+      mgr.setURLModifier(u => urls.get(decodeURIComponent(u.split('/').pop().split('?')[0])) || u);
+      const loader = new GLTFLoader(mgr);
+      const buf = ext === 'glb' ? await main.arrayBuffer() : await main.text();
+      const gltf = await new Promise((res,rej) => loader.parse(buf, '', res, rej));
+      obj = gltf.scene;
+      setTimeout(() => urls.forEach(URL.revokeObjectURL), 10000);
+    }
+    disposeModel();
+    S.model = obj;
+    pivot.add(obj);
+    frameModel();
+    applyMaterials();
+    updateClip();
+    $('hint').classList.add('hide');
+    let tris = 0;
+    obj.traverse(o => { if(o.isMesh){ const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count)/3; }});
+    setInfo(t('info', main.name, Math.round(tris).toLocaleString(LOC[lang]), S.size.x.toFixed(2), S.size.y.toFixed(2), S.size.z.toFixed(2)));
+  }catch(err){
+    console.error(err);
+    setInfo(t('failed', main.name, err.message || err), true);
+  }
+}
+
+function frameModel(){
+  S.model.position.set(0,0,0);
+  S.model.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(S.model);
+  const center = box.getCenter(new THREE.Vector3());
+  box.getSize(S.size);
+  S.model.position.sub(center);            // center bounding box at (0,0,0)
+  S.model.updateMatrixWorld(true);
+  S.radius = Math.max(S.size.length()/2, 1e-6);
+
+  gridHelper.scale.setScalar(Math.max(S.size.x, S.size.z, 1e-6) * 2.5 / 10);
+  gridHelper.position.y = -S.size.y/2;
+  axesHelper.scale.setScalar(Math.max(S.size.x,S.size.y,S.size.z) * 0.75);
+
+  camera.near = S.radius/100; camera.far = S.radius*100;
+  camera.updateProjectionMatrix();
+  controls.target.set(0,0,0);
+  controls.minDistance = S.radius*0.05; controls.maxDistance = S.radius*50;
+  setView('iso');
+}
+
+/* ---------- views ---------- */
+const VIEWS = {
+  top:[0,1,0], bottom:[0,-1,0], front:[0,0,1], back:[0,0,-1],
+  right:[1,0,0], left:[-1,0,0], iso:[1,.8,1]
+};
+function setView(name){
+  const dir = new THREE.Vector3(...VIEWS[name]).normalize();
+  const vfov = THREE.MathUtils.degToRad(camera.fov);
+  const hfov = 2*Math.atan(Math.tan(vfov/2)*camera.aspect);
+  const dist = S.radius / Math.sin(Math.min(vfov,hfov)/2) * 1.1;
+  controls.target.set(0,0,0);
+  camera.position.copy(dir.multiplyScalar(dist));
+  camera.up.set(0,1,0);
+  if(name === 'top' || name === 'bottom') camera.up.set(0,0,name==='top'?-1:1);
+  camera.lookAt(0,0,0);
+  controls.update();
+}
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view));
+
+/* ---------- section ---------- */
+function updateClip(){
+  const a = AXES[S.axis];
+  const extent = S.size[S.axis];
+  const t = +$('offset').value/100;                 // 0..1
+  const pos = (t - .5) * extent;                    // along the axis, in centered coords
+  const n = a.clone().multiplyScalar(S.flip ? 1 : -1);
+  plane.normal.copy(n);
+  plane.constant = -n.dot(a.clone().multiplyScalar(pos)); // plane passes through pos
+  $('offVal').textContent = Math.round(t*100) + '%';
+  applyMaterials();
+}
+$('clipOn').onclick = e => { S.clip = !S.clip; e.currentTarget.classList.toggle('on', S.clip); updateClip(); };
+$('offset').oninput = updateClip;
+$('flip').onclick = () => { S.flip = !S.flip; $('flip').classList.toggle('on', S.flip); updateClip(); };
+document.querySelectorAll('[data-axis]').forEach(b => b.onclick = () => {
+  S.axis = b.dataset.axis;
+  document.querySelectorAll('[data-axis]').forEach(x => x.classList.toggle('on', x === b));
+  updateClip();
+});
+
+/* ---------- display toggles ---------- */
+const toggle = (id, fn) => $(id).onclick = e => { const on = fn(); e.currentTarget.classList.toggle('on', on); };
+toggle('xray', () => (S.xray = !S.xray, applyMaterials(), S.xray));
+toggle('wire', () => (S.wire = !S.wire, applyMaterials(), S.wire));
+toggle('grid', () => (gridHelper.visible = !gridHelper.visible));
+toggle('axes', () => (axesHelper.visible = !axesHelper.visible));
+
+/* ---------- screenshot ---------- */
+$('shot').onclick = () => {
+  controls.update();
+  renderer.render(scene, camera);           // render immediately before reading pixels
+  renderer.domElement.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'model-' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }, 'image/png');
+};
+
+/* ---------- input: picker + drag & drop ---------- */
+$('file').onchange = e => { if(e.target.files.length) loadFiles(e.target.files); e.target.value = ''; };
+$('openBtn').onclick = () => $('file').click();
+let dragDepth = 0;
+addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; $('drop').classList.add('show'); });
+addEventListener('dragleave', () => { if(--dragDepth <= 0){ dragDepth = 0; $('drop').classList.remove('show'); }});
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; $('drop').classList.remove('show'); if(e.dataTransfer.files.length) loadFiles(e.dataTransfer.files); });
+
+function setInfo(t, err){ const i = $('info'); i.textContent = t; i.classList.toggle('show', !!err); }
+function setMenu(hide){
+  document.body.classList.toggle('hidemenu', hide);
+  setMenuLabel();
+  $('menuBtn').setAttribute('aria-pressed', hide);
+}
+$('menuBtn').onclick = () => setMenu(!document.body.classList.contains('hidemenu'));
+addEventListener('keydown', e => { if((e.key==='h'||e.key==='H') && !e.ctrlKey && !e.metaKey && !e.altKey) setMenu(!document.body.classList.contains('hidemenu')); });
+/* ---------- alt paneli aşağı kaydırıp gizleme ---------- */
+const side = $('side'), grab = $('grab');
+let collapsed = false, dy = 0, drag = null;
+const maxDy = () => Math.max(0, side.offsetHeight - 26);
+function setDy(v, anim){ side.classList.toggle('snap', !!anim); dy = v; side.style.setProperty('--dy', v + 'px'); }
+function settle(c, anim = true){ collapsed = c; setDy(c ? maxDy() : 0, anim); grab.setAttribute('aria-expanded', String(!c)); }
+grab.addEventListener('pointerdown', e => { grab.setPointerCapture(e.pointerId); drag = {y:e.clientY, start:dy, moved:false}; side.classList.remove('snap'); });
+grab.addEventListener('pointermove', e => {
+  if(!drag) return;
+  const d = e.clientY - drag.y;
+  if(Math.abs(d) > 4) drag.moved = true;
+  setDy(Math.min(maxDy(), Math.max(0, drag.start + d)), false);
+});
+const endDrag = () => {
+  if(!drag) return;
+  const d = drag; drag = null;
+  if(!d.moved) settle(!collapsed);
+  else settle(dy > maxDy() * (collapsed ? .75 : .25));
+};
+grab.addEventListener('pointerup', endDrag);
+grab.addEventListener('pointercancel', endDrag);
+grab.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); settle(!collapsed); } });
+addEventListener('resize', () => { if(getComputedStyle(grab).display === 'none') setDy(0, false); else settle(collapsed, false); });
+
+/* ---------- uygulama (PWA) ---------- */
+let installEvt = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('installBtn').hidden = false; });
+addEventListener('appinstalled', () => { installEvt = null; $('installBtn').hidden = true; });
+$('installBtn').onclick = async () => { if(!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $('installBtn').hidden = true; };
+if('launchQueue' in window){   // yüklü uygulamada "birlikte aç" ile gelen dosyalar
+  launchQueue.setConsumer(async p => { if(p.files && p.files.length) loadFiles(await Promise.all(p.files.map(h => h.getFile()))); });
+}
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  navigator.serviceWorker.register('sw.js').catch(err => console.warn('Service worker kaydedilemedi:', err));
+}
+$('lang').onchange = e => { lang = e.target.value; try{ localStorage.setItem('lang', lang); }catch{} applyLang(); };
+applyLang();
+window.__viewerReady = true;
+
+/* ---------- loop ---------- */
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+});
+renderer.setAnimationLoop(() => {
+  controls.update();
+  // lights follow the camera slightly so the model always reads well
+  sun.position.copy(camera.position).add(new THREE.Vector3(S.radius,S.radius*2,S.radius*.5));
+  fill.position.copy(camera.position).multiplyScalar(-1);
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
